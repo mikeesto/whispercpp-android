@@ -15,12 +15,13 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.whispercppdemo.media.decodeWaveFile
 import com.whispercppdemo.recorder.Recorder
-import com.whispercpp.whisper.WhisperContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
+import android.content.ClipData
+import android.content.ClipboardManager
 
 private const val LOG_TAG = "MainScreenViewModel"
 
@@ -32,6 +33,7 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     var isRecording by mutableStateOf(false)
         private set
 
+    private var lastTranscribedText by mutableStateOf("")
     private val modelsPath = File(application.filesDir, "models")
     private val samplesPath = File(application.filesDir, "samples")
     private var recorder: Recorder = Recorder()
@@ -41,17 +43,11 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            printSystemInfo()
             loadData()
         }
     }
 
-    private suspend fun printSystemInfo() {
-        printMessage(String.format("System Info: %s\n", com.whispercpp.whisper.WhisperContext.getSystemInfo()))
-    }
-
     private suspend fun loadData() {
-        printMessage("Loading data...\n")
         try {
             copyAssets()
             loadBaseModel()
@@ -69,48 +65,25 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     private suspend fun copyAssets() = withContext(Dispatchers.IO) {
         modelsPath.mkdirs()
         samplesPath.mkdirs()
-        //application.copyData("models", modelsPath, ::printMessage)
-        application.copyData("samples", samplesPath, ::printMessage)
-        printMessage("All data copied to working directory.\n")
+        application.copyData("samples", samplesPath)
     }
 
     private suspend fun loadBaseModel() = withContext(Dispatchers.IO) {
         printMessage("Loading model...\n")
         val models = application.assets.list("models/")
         if (models != null) {
-            whisperContext = com.whispercpp.whisper.WhisperContext.createContextFromAsset(application.assets, "models/" + models[0])
+            whisperContext = com.whispercpp.whisper.WhisperContext.createContextFromAsset(
+                application.assets,
+                "models/" + models[0]
+            )
             printMessage("Loaded model ${models[0]}.\n")
         }
-
-        //val firstModel = modelsPath.listFiles()!!.first()
-        //whisperContext = WhisperContext.createContextFromFile(firstModel.absolutePath)
     }
 
-    fun benchmark() = viewModelScope.launch {
-        runBenchmark(6)
-    }
-
-    fun transcribeSample() = viewModelScope.launch {
-        transcribeAudio(getFirstSample())
-    }
-
-    private suspend fun runBenchmark(nthreads: Int) {
-        if (!canTranscribe) {
-            return
-        }
-
-        canTranscribe = false
-
-        printMessage("Running benchmark. This will take minutes...\n")
-        whisperContext?.benchMemory(nthreads)?.let{ printMessage(it) }
-        printMessage("\n")
-        whisperContext?.benchGgmlMulMat(nthreads)?.let{ printMessage(it) }
-
-        canTranscribe = true
-    }
-
-    private suspend fun getFirstSample(): File = withContext(Dispatchers.IO) {
-        samplesPath.listFiles()!!.first()
+    val copyToClipboard = {
+        val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("transcribed_text", lastTranscribedText)
+        clipboard.setPrimaryClip(clip)
     }
 
     private suspend fun readAudioSamples(file: File): FloatArray = withContext(Dispatchers.IO) {
@@ -142,8 +115,11 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
             val data = readAudioSamples(file)
             printMessage("${data.size / (16000 / 1000)} ms\n")
             printMessage("Transcribing data...\n")
+
             val start = System.currentTimeMillis()
             val text = whisperContext?.transcribeData(data)
+            lastTranscribedText = text ?: ""
+
             val elapsed = System.currentTimeMillis() - start
             printMessage("Done ($elapsed ms): \n$text\n")
         } catch (e: Exception) {
@@ -206,15 +182,13 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
 
 private suspend fun Context.copyData(
     assetDirName: String,
-    destDir: File,
-    printMessage: suspend (String) -> Unit
+    destDir: File
 ) = withContext(Dispatchers.IO) {
     assets.list(assetDirName)?.forEach { name ->
         val assetPath = "$assetDirName/$name"
         Log.v(LOG_TAG, "Processing $assetPath...")
         val destination = File(destDir, name)
         Log.v(LOG_TAG, "Copying $assetPath to $destination...")
-        printMessage("Copying $name...\n")
         assets.open(assetPath).use { input ->
             destination.outputStream().use { output ->
                 input.copyTo(output)

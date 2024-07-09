@@ -20,9 +20,8 @@ fun MainScreen(viewModel: MainScreenViewModel) {
         canTranscribe = viewModel.canTranscribe,
         isRecording = viewModel.isRecording,
         messageLog = viewModel.dataLog,
-        onBenchmarkTapped = viewModel::benchmark,
-        onTranscribeSampleTapped = viewModel::transcribeSample,
-        onRecordTapped = viewModel::toggleRecord
+        onRecordTapped = viewModel::toggleRecord,
+        copyToClipboard = viewModel.copyToClipboard
     )
 }
 
@@ -32,9 +31,8 @@ private fun MainScreen(
     canTranscribe: Boolean,
     isRecording: Boolean,
     messageLog: String,
-    onBenchmarkTapped: () -> Unit,
-    onTranscribeSampleTapped: () -> Unit,
-    onRecordTapped: () -> Unit
+    onRecordTapped: () -> Unit,
+    copyToClipboard: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -49,14 +47,13 @@ private fun MainScreen(
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.SpaceBetween) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    BenchmarkButton(enabled = canTranscribe, onClick = onBenchmarkTapped)
-                    TranscribeSampleButton(enabled = canTranscribe, onClick = onTranscribeSampleTapped)
-                }
-                RecordButton(
+               RecordButton(
                     enabled = canTranscribe,
                     isRecording = isRecording,
                     onClick = onRecordTapped
+                )
+                CopyButton(
+                    copyToClipboard
                 )
             }
             MessageLog(messageLog)
@@ -68,20 +65,6 @@ private fun MainScreen(
 private fun MessageLog(log: String) {
     SelectionContainer {
         Text(modifier = Modifier.verticalScroll(rememberScrollState()), text = log)
-    }
-}
-
-@Composable
-private fun BenchmarkButton(enabled: Boolean, onClick: () -> Unit) {
-    Button(onClick = onClick, enabled = enabled) {
-        Text("Benchmark")
-    }
-}
-
-@Composable
-private fun TranscribeSampleButton(enabled: Boolean, onClick: () -> Unit) {
-    Button(onClick = onClick, enabled = enabled) {
-        Text("Transcribe sample")
     }
 }
 
@@ -110,5 +93,17 @@ private fun RecordButton(enabled: Boolean, isRecording: Boolean, onClick: () -> 
                 "Start recording"
             }
         )
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+private fun CopyButton(copyToClipboard: () -> Unit){
+    Button(
+        onClick = {
+            copyToClipboard()
+        }
+    ) {
+        Text("Copy to clipboard")
     }
 }
