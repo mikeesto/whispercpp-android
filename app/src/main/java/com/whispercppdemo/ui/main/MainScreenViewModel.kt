@@ -2,12 +2,10 @@ package com.whispercppdemo.ui.main
 
 import android.app.Application
 import android.content.Context
-import android.media.MediaPlayer
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -38,7 +36,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     private val samplesPath = File(application.filesDir, "samples")
     private var recorder: Recorder = Recorder()
     private var whisperContext: com.whispercpp.whisper.WhisperContext? = null
-    private var mediaPlayer: MediaPlayer? = null
     private var recordedFile: File? = null
 
     init {
@@ -87,20 +84,7 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
     }
 
     private suspend fun readAudioSamples(file: File): FloatArray = withContext(Dispatchers.IO) {
-        stopPlayback()
-        startPlayback(file)
         return@withContext decodeWaveFile(file)
-    }
-
-    private suspend fun stopPlayback() = withContext(Dispatchers.Main) {
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
-        mediaPlayer = null
-    }
-
-    private suspend fun startPlayback(file: File) = withContext(Dispatchers.Main) {
-        mediaPlayer = MediaPlayer.create(application, file.absolutePath.toUri())
-        mediaPlayer?.start()
     }
 
     private suspend fun transcribeAudio(file: File) {
@@ -112,9 +96,8 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
 
         try {
             val data = readAudioSamples(file)
-            printMessage("Transcribing data...\n")
+            printMessage("Transcribing...\n")
 
-            val start = System.currentTimeMillis()
             val text = whisperContext?.transcribeData(data, false)?.trimStart()
             lastTranscribedText = text ?: ""
             printMessage(if (text != null) "$text\n" else "No transcription available\n")
@@ -133,7 +116,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
                 isRecording = false
                 recordedFile?.let { transcribeAudio(it) }
             } else {
-                stopPlayback()
                 val file = getTempFileForRecording()
                 recorder.startRecording(file) { e ->
                     viewModelScope.launch {
@@ -161,7 +143,6 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
         runBlocking {
             whisperContext?.release()
             whisperContext = null
-            stopPlayback()
         }
     }
 
