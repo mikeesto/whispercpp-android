@@ -111,17 +111,13 @@ class MainScreenViewModel(private val application: Application) : ViewModel() {
         canTranscribe = false
 
         try {
-            printMessage("Reading wave samples... ")
             val data = readAudioSamples(file)
-            printMessage("${data.size / (16000 / 1000)} ms\n")
             printMessage("Transcribing data...\n")
 
             val start = System.currentTimeMillis()
-            val text = whisperContext?.transcribeData(data)
+            val text = whisperContext?.transcribeData(data, false)?.trimStart()
             lastTranscribedText = text ?: ""
-
-            val elapsed = System.currentTimeMillis() - start
-            printMessage("Done ($elapsed ms): \n$text\n")
+            printMessage(if (text != null) "$text\n" else "No transcription available\n")
         } catch (e: Exception) {
             Log.w(LOG_TAG, e)
             printMessage("${e.localizedMessage}\n")
